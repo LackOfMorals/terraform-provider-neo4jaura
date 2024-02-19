@@ -30,7 +30,7 @@ type ShortTenantModel struct {
 	Name types.String `tfsdk:"name"`
 }
 
-func (ds TenantsDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
+func (ds *TenantsDataSource) Configure(ctx context.Context, request datasource.ConfigureRequest, response *datasource.ConfigureResponse) {
 	if request.ProviderData == nil {
 		return
 	}
@@ -46,11 +46,11 @@ func (ds TenantsDataSource) Configure(ctx context.Context, request datasource.Co
 	ds.auraClient = auraClient
 }
 
-func (ds TenantsDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
+func (ds *TenantsDataSource) Metadata(ctx context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
 	response.TypeName = request.ProviderTypeName + "_tenants"
 }
 
-func (ds TenantsDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+func (ds *TenantsDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Data Source containing all Aura Tenants",
 		Attributes: map[string]schema.Attribute{
@@ -79,7 +79,7 @@ func (ds TenantsDataSource) Schema(ctx context.Context, request datasource.Schem
 	}
 }
 
-func (ds TenantsDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
+func (ds *TenantsDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var data TenantsModel
 
 	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)

@@ -32,15 +32,14 @@ func (a *AuraAuth) authenticate() error {
 		return err
 	}
 
-	var encodedCreds []byte
-	base64.StdEncoding.Encode(encodedCreds, []byte(a.clientId+":"+a.clientSecret))
+	encodedCreds := base64.StdEncoding.EncodeToString([]byte(a.clientId + ":" + a.clientSecret))
 
 	req := &http.Request{
 		Method: "POST",
 		URL:    authUrl,
 		Header: map[string][]string{
 			"Content-Type":  {"application/x-www-form-urlencoded"},
-			"Authorization": {"Basic " + string(encodedCreds)},
+			"Authorization": {"Basic " + encodedCreds},
 		},
 		Body: io.NopCloser(strings.NewReader("grant_type=client_credentials")),
 	}
@@ -72,7 +71,7 @@ func (a *AuraAuth) GetToken() (string, error) {
 	defer a.mutex.Unlock()
 	if a.token == nil || a.token.ExpiredIn < time.Now().Unix()+60 {
 		err := a.authenticate()
-		if err == nil {
+		if err != nil {
 			return "", err
 		}
 	}

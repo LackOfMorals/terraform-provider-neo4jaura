@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 )
 
 const (
@@ -23,6 +24,7 @@ func NewAuraClient(clientId, clientSecret string) *AuraClient {
 			clientId:     clientId,
 			clientSecret: clientSecret,
 			httpClient:   httpClient,
+			mutex:        &sync.Mutex{},
 		},
 		httpClient: httpClient,
 	}
