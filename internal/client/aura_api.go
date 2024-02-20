@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
 )
 
 type AuraApi struct {
@@ -24,12 +25,7 @@ func (api *AuraApi) GetTenants() (GetTenantsResponse, error) {
 		return GetTenantsResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
 	}
 
-	var tenantsResponse GetTenantsResponse
-	err = json.Unmarshal(payload, &tenantsResponse)
-	if err != nil {
-		return GetTenantsResponse{}, err
-	}
-	return tenantsResponse, err
+	return util.Unmarshal[GetTenantsResponse](payload)
 }
 
 func (api *AuraApi) PostInstance(request PostInstanceRequest) (PostInstanceResponse, error) {
@@ -44,15 +40,10 @@ func (api *AuraApi) PostInstance(request PostInstanceRequest) (PostInstanceRespo
 	}
 
 	if status != 202 {
-		return PostInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
+		return PostInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
 	}
 
-	var response PostInstanceResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return PostInstanceResponse{}, err
-	}
-	return response, nil
+	return util.Unmarshal[PostInstanceResponse](body)
 }
 
 func (api *AuraApi) GetInstanceById(id string) (GetInstanceResponse, error) {
@@ -63,13 +54,7 @@ func (api *AuraApi) GetInstanceById(id string) (GetInstanceResponse, error) {
 	if status != 200 {
 		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
 	}
-
-	var response GetInstanceResponse
-	err = json.Unmarshal(payload, &response)
-	if err != nil {
-		return GetInstanceResponse{}, err
-	}
-	return response, nil
+	return util.Unmarshal[GetInstanceResponse](payload)
 }
 
 func (api *AuraApi) DeleteInstanceById(id string) (GetInstanceResponse, error) {
@@ -80,13 +65,7 @@ func (api *AuraApi) DeleteInstanceById(id string) (GetInstanceResponse, error) {
 	if status != 202 {
 		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
 	}
-
-	var response GetInstanceResponse
-	err = json.Unmarshal(payload, &response)
-	if err != nil {
-		return GetInstanceResponse{}, err
-	}
-	return response, nil
+	return util.Unmarshal[GetInstanceResponse](payload)
 }
 
 func (api *AuraApi) PatchInstanceById(id string, request PatchInstanceRequest) (GetInstanceResponse, error) {
@@ -102,11 +81,27 @@ func (api *AuraApi) PatchInstanceById(id string, request PatchInstanceRequest) (
 	if status != 202 {
 		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
 	}
+	return util.Unmarshal[GetInstanceResponse](body)
+}
 
-	var response GetInstanceResponse
-	err = json.Unmarshal(body, &response)
+func (api *AuraApi) PauseInstanceById(id string) (GetInstanceResponse, error) {
+	body, status, err := api.auraClient.Patch(fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
-	return response, nil
+	if status != 202 {
+		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
+	}
+	return util.Unmarshal[GetInstanceResponse](body)
+}
+
+func (api *AuraApi) ResumeInstanceById(id string) (GetInstanceResponse, error) {
+	body, status, err := api.auraClient.Patch(fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
+	if err != nil {
+		return GetInstanceResponse{}, err
+	}
+	if status != 202 {
+		return GetInstanceResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
+	}
+	return util.Unmarshal[GetInstanceResponse](body)
 }

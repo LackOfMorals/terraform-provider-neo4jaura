@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -42,6 +44,7 @@ type InstanceResourceModel struct {
 	Username      types.String `tfsdk:"username"`
 	Password      types.String `tfsdk:"password"`
 	Version       types.String `tfsdk:"version"`
+	Paused        types.Bool   `tfsdk:"paused"`
 }
 
 func (r *InstanceResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
@@ -138,6 +141,14 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"paused": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
 		},
 	}
 }
@@ -146,7 +157,6 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	var data InstanceResourceModel
 
 	response.Diagnostics.Append(request.Plan.Get(ctx, &data)...)
-
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -174,19 +184,9 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 
 	tflog.Debug(ctx, "Created an instance with id "+postInstanceResp.Data.Id)
 
-	_, err = util.WaitUntil(
-		func() (client.GetInstanceResponse, error) {
-			r, e := r.auraApi.GetInstanceById(postInstanceResp.Data.Id)
-			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
-			return r, e
-		},
-		func(resp client.GetInstanceResponse, e error) bool {
-			return err == nil && strings.ToLower(resp.Data.Status) == "running"
-		},
-		time.Second,
-		time.Minute*time.Duration(5),
-	)
-
+	_, err = r.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+		return strings.ToLower(r.Data.Status) == "running"
+	})
 	if err != nil {
 		response.Diagnostics.AddError("Instance is not running in time", err.Error())
 	}
@@ -221,40 +221,46 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	if err != nil {
 		response.Diagnostics.AddError("Error while getting instance details", err.Error())
 	}
+	// Regular inplace update
 	if plan.Name.ValueString() != instance.Data.Name || plan.Memory.ValueString() != instance.Data.Memory {
-		request := &client.PatchInstanceRequest{}
-		if plan.Name.ValueString() != instance.Data.Name {
-			request.Name = plan.Name.ValueStringPointer()
-		}
-		if plan.Memory.ValueString() != instance.Data.Memory {
-			request.Memory = plan.Memory.ValueStringPointer()
-		}
-
-		updated, err := r.auraApi.PatchInstanceById(instance.Data.Id, *request)
+		_, err := r.auraApi.PatchInstanceById(instance.Data.Id, client.PatchInstanceRequest{
+			Name:   plan.Name.ValueStringPointer(),
+			Memory: plan.Memory.ValueStringPointer(),
+		})
 
 		if err != nil {
 			response.Diagnostics.AddError("Error while updating the instance details", err.Error())
 			return
 		}
 
-		updated, err = util.WaitUntil(
-			func() (client.GetInstanceResponse, error) {
-				r, e := r.auraApi.GetInstanceById(plan.Id.ValueString())
-				tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
-				return r, e
-			},
-			func(resp client.GetInstanceResponse, e error) bool {
-				return err == nil &&
-					resp.Data.Memory == plan.Memory.ValueString() &&
-					resp.Data.Name == plan.Name.ValueString() &&
-					strings.ToLower(resp.Data.Status) == "running"
-			},
-			time.Second,
-			time.Minute*time.Duration(10),
-		)
+		_, err = r.WaitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
+			return resp.Data.Memory == plan.Memory.ValueString() &&
+				resp.Data.Name == plan.Name.ValueString() &&
+				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(instance.Data.Status) == "paused")
+		})
+	}
 
-		plan.Name = types.StringValue(updated.Data.Name)
-		plan.Memory = types.StringValue(updated.Data.Memory)
+	// Pause
+	if plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) != "paused" {
+		_, err := r.auraApi.PauseInstanceById(instance.Data.Id)
+		if err != nil {
+			response.Diagnostics.AddError("Error while pausing the instance", err.Error())
+			return
+		}
+		_, err = r.WaitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
+			return strings.ToLower(instance.Data.Status) == "paused"
+		})
+
+		// Resume
+	} else if !plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) == "paused" {
+		_, err := r.auraApi.ResumeInstanceById(instance.Data.Id)
+		if err != nil {
+			response.Diagnostics.AddError("Error while resume the instance", err.Error())
+			return
+		}
+		_, err = r.WaitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
+			return strings.ToLower(instance.Data.Status) == "running"
+		})
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
@@ -273,4 +279,22 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	if err != nil {
 		response.Diagnostics.AddError("Error while deleting an instance", err.Error())
 	}
+}
+
+func (r *InstanceResource) WaitUntilInstanceIsInState(
+	ctx context.Context,
+	id string,
+	condition func(client.GetInstanceResponse) bool) (client.GetInstanceResponse, error) {
+	return util.WaitUntil(
+		func() (client.GetInstanceResponse, error) {
+			r, e := r.auraApi.GetInstanceById(id)
+			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
+			return r, e
+		},
+		func(resp client.GetInstanceResponse, e error) bool {
+			return e == nil && condition(resp)
+		},
+		time.Second,
+		time.Minute*time.Duration(7),
+	)
 }
