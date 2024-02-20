@@ -7,8 +7,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/provider/client"
-	auradatasource "github.com/venikkin/neo4j-aura-terraform-provider/internal/provider/datasource"
+	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
+	auradatasource "github.com/venikkin/neo4j-aura-terraform-provider/internal/datasource"
+	auraresource "github.com/venikkin/neo4j-aura-terraform-provider/internal/resource"
 )
 
 type Neo4jAuraProvider struct {
@@ -40,7 +41,6 @@ func (n *Neo4jAuraProvider) Schema(ctx context.Context, request provider.SchemaR
 			},
 		},
 	}
-	// todo diagnostics
 }
 
 func (n *Neo4jAuraProvider) Configure(ctx context.Context, request provider.ConfigureRequest, response *provider.ConfigureResponse) {
@@ -68,7 +68,7 @@ func (n *Neo4jAuraProvider) DataSources(ctx context.Context) []func() datasource
 
 func (n *Neo4jAuraProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		//auraresource.NewInstanceResource,
+		auraresource.NewInstanceResource,
 	}
 }
 

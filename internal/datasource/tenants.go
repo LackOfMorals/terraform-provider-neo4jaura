@@ -2,23 +2,24 @@ package datasource
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/venikkin/neo4j-aura-terraform-provider/internal/provider/client"
+	client2 "github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
 )
 
-var _ datasource.DataSource = &TenantsDataSource{}
-var _ datasource.DataSourceWithConfigure = &TenantsDataSource{}
+var (
+	_ datasource.DataSource              = &TenantsDataSource{}
+	_ datasource.DataSourceWithConfigure = &TenantsDataSource{}
+)
 
 func NewTenantsDataSource() datasource.DataSource {
 	return &TenantsDataSource{}
 }
 
 type TenantsDataSource struct {
-	auraClient *client.AuraClient
+	auraClient *client2.AuraClient
 }
 
 type TenantsModel struct {
@@ -35,7 +36,7 @@ func (ds *TenantsDataSource) Configure(ctx context.Context, request datasource.C
 		return
 	}
 
-	auraClient, ok := request.ProviderData.(*client.AuraClient)
+	auraClient, ok := request.ProviderData.(*client2.AuraClient)
 	if !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
@@ -54,14 +55,6 @@ func (ds *TenantsDataSource) Schema(ctx context.Context, request datasource.Sche
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Data Source containing all Aura Tenants",
 		Attributes: map[string]schema.Attribute{
-			//"tenants": schema.ListAttribute{
-			//	ElementType: types.ObjectType{
-			//		AttrTypes: map[string]attr.Type{
-			//			"id":   types.StringType,
-			//			"name": types.StringType,
-			//		},
-			//	},
-			//},
 			"tenants": schema.ListNestedAttribute{
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -88,22 +81,9 @@ func (ds *TenantsDataSource) Read(ctx context.Context, request datasource.ReadRe
 		return
 	}
 
-	payload, status, err := ds.auraClient.Get("tenants")
+	tenantsResponse, err := client2.NewAuraApi(ds.auraClient).GetTenants()
 	if err != nil {
 		response.Diagnostics.AddError("Error while reading tenants", err.Error())
-		return
-	}
-
-	if status != 200 {
-		response.Diagnostics.AddError("Aura responded with error",
-			fmt.Sprintf("Status: %+v. Response: %+v", status, string(payload)))
-		return
-	}
-
-	var tenantsResponse client.TenantsResponse
-	err = json.Unmarshal(payload, &tenantsResponse)
-	if err != nil {
-		response.Diagnostics.AddError("Error while unmarshalling tenants response", err.Error())
 		return
 	}
 
