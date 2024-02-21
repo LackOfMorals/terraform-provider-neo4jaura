@@ -184,7 +184,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 
 	tflog.Debug(ctx, "Created an instance with id "+postInstanceResp.Data.Id)
 
-	_, err = r.WaitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
+	_, err = r.waitUntilInstanceIsInState(ctx, postInstanceResp.Data.Id, func(r client.GetInstanceResponse) bool {
 		return strings.ToLower(r.Data.Status) == "running"
 	})
 	if err != nil {
@@ -192,6 +192,15 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
+
+	// Pausing new instance
+	if data.Paused.ValueBool() {
+		diagError := r.pauseInstance(ctx, data.Id.ValueString())
+		if diagError.IsNotEmpty() {
+			response.Diagnostics.AddError(diagError.Message, diagError.Details)
+			return
+		}
+	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }
@@ -220,9 +229,22 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	instance, err := r.auraApi.GetInstanceById(plan.Id.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError("Error while getting instance details", err.Error())
+		return
 	}
+
+	// Resume
+	if !plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) == "paused" {
+		diagError := r.resumeInstance(ctx, instance.Data.Id)
+		if diagError.IsNotEmpty() {
+			response.Diagnostics.AddError(diagError.Message, diagError.Details)
+			return
+		}
+	}
+
 	// Regular inplace update
 	if plan.Name.ValueString() != instance.Data.Name || plan.Memory.ValueString() != instance.Data.Memory {
+		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s",
+			instance.Data.Name, plan.Name.ValueString(), instance.Data.Memory, plan.Memory.ValueString()))
 		_, err := r.auraApi.PatchInstanceById(instance.Data.Id, client.PatchInstanceRequest{
 			Name:   plan.Name.ValueStringPointer(),
 			Memory: plan.Memory.ValueStringPointer(),
@@ -233,34 +255,25 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 			return
 		}
 
-		_, err = r.WaitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
+		_, err = r.waitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
 				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(instance.Data.Status) == "paused")
 		})
+
+		if err != nil {
+			response.Diagnostics.AddError("Error while waiting fro the instance details to be updated", err.Error())
+			return
+		}
 	}
 
 	// Pause
 	if plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) != "paused" {
-		_, err := r.auraApi.PauseInstanceById(instance.Data.Id)
-		if err != nil {
-			response.Diagnostics.AddError("Error while pausing the instance", err.Error())
+		diagError := r.pauseInstance(ctx, instance.Data.Id)
+		if diagError.IsNotEmpty() {
+			response.Diagnostics.AddError(diagError.Message, diagError.Details)
 			return
 		}
-		_, err = r.WaitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
-			return strings.ToLower(instance.Data.Status) == "paused"
-		})
-
-		// Resume
-	} else if !plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) == "paused" {
-		_, err := r.auraApi.ResumeInstanceById(instance.Data.Id)
-		if err != nil {
-			response.Diagnostics.AddError("Error while resume the instance", err.Error())
-			return
-		}
-		_, err = r.WaitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
-			return strings.ToLower(instance.Data.Status) == "running"
-		})
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
@@ -281,7 +294,35 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	}
 }
 
-func (r *InstanceResource) WaitUntilInstanceIsInState(
+func (r *InstanceResource) resumeInstance(ctx context.Context, id string) util.DiagnosticsError {
+	_, err := r.auraApi.ResumeInstanceById(id)
+	if err != nil {
+		return util.NewDiagnosticsError("Error while resume the instance", err.Error())
+	}
+	_, err = r.waitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
+		return strings.ToLower(resp.Data.Status) == "running"
+	})
+	if err != nil {
+		return util.NewDiagnosticsError("Error while waiting instance to be resumed", err.Error())
+	}
+	return util.NoDiagnosticsError()
+}
+
+func (r *InstanceResource) pauseInstance(ctx context.Context, id string) util.DiagnosticsError {
+	_, err := r.auraApi.PauseInstanceById(id)
+	if err != nil {
+		return util.NewDiagnosticsError("Error while pausing the instance", err.Error())
+	}
+	_, err = r.waitUntilInstanceIsInState(ctx, id, func(resp client.GetInstanceResponse) bool {
+		return strings.ToLower(resp.Data.Status) == "paused"
+	})
+	if err != nil {
+		return util.NewDiagnosticsError("Error while waiting for instance to be paused", err.Error())
+	}
+	return util.NoDiagnosticsError()
+}
+
+func (r *InstanceResource) waitUntilInstanceIsInState(
 	ctx context.Context,
 	id string,
 	condition func(client.GetInstanceResponse) bool) (client.GetInstanceResponse, error) {

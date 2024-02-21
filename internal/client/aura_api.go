@@ -85,7 +85,7 @@ func (api *AuraApi) PatchInstanceById(id string, request PatchInstanceRequest) (
 }
 
 func (api *AuraApi) PauseInstanceById(id string) (GetInstanceResponse, error) {
-	body, status, err := api.auraClient.Patch(fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
+	body, status, err := api.auraClient.Post(fmt.Sprintf("instances/%s/pause", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}
@@ -96,7 +96,7 @@ func (api *AuraApi) PauseInstanceById(id string) (GetInstanceResponse, error) {
 }
 
 func (api *AuraApi) ResumeInstanceById(id string) (GetInstanceResponse, error) {
-	body, status, err := api.auraClient.Patch(fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
+	body, status, err := api.auraClient.Post(fmt.Sprintf("instances/%s/resume", id), []byte("{}"))
 	if err != nil {
 		return GetInstanceResponse{}, err
 	}

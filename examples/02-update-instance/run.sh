@@ -5,7 +5,7 @@ set -e
 function cleanup() {
     rm -rf .terraform || echo ""
     rm .terraform* || echo ""
-    rm terraform.tfstate || echo ""
+    rm terraform.tfstate* || echo ""
 }
 
 cleanup
