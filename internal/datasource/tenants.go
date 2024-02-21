@@ -6,7 +6,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	client2 "github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
+	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
 )
 
 var (
@@ -19,7 +19,7 @@ func NewTenantsDataSource() datasource.DataSource {
 }
 
 type TenantsDataSource struct {
-	auraClient *client2.AuraClient
+	auraClient *client.AuraClient
 }
 
 type TenantsModel struct {
@@ -36,7 +36,7 @@ func (ds *TenantsDataSource) Configure(ctx context.Context, request datasource.C
 		return
 	}
 
-	auraClient, ok := request.ProviderData.(*client2.AuraClient)
+	auraClient, ok := request.ProviderData.(*client.AuraClient)
 	if !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
@@ -81,7 +81,7 @@ func (ds *TenantsDataSource) Read(ctx context.Context, request datasource.ReadRe
 		return
 	}
 
-	tenantsResponse, err := client2.NewAuraApi(ds.auraClient).GetTenants()
+	tenantsResponse, err := client.NewAuraApi(ds.auraClient).GetTenants()
 	if err != nil {
 		response.Diagnostics.AddError("Error while reading tenants", err.Error())
 		return

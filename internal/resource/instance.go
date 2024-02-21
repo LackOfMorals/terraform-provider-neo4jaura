@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/client"
 	"github.com/venikkin/neo4j-aura-terraform-provider/internal/util"
@@ -33,7 +34,7 @@ type InstanceResource struct {
 }
 
 type InstanceResourceModel struct {
-	Id            types.String `tfsdk:"id"`
+	InstanceId    types.String `tfsdk:"instance_id"`
 	Name          types.String `tfsdk:"name"`
 	Region        types.String `tfsdk:"region"`
 	Memory        types.String `tfsdk:"memory"`
@@ -45,6 +46,12 @@ type InstanceResourceModel struct {
 	Password      types.String `tfsdk:"password"`
 	Version       types.String `tfsdk:"version"`
 	Paused        types.Bool   `tfsdk:"paused"`
+	Source        types.Object `tfsdk:"source"`
+}
+
+type InstanceResourceSourceModel struct {
+	InstanceId types.String `tfsdk:"instance_id"`
+	SnapshotId types.String `tfsdk:"snapshot_id"`
 }
 
 func (r *InstanceResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
@@ -69,11 +76,11 @@ func (r *InstanceResource) Configure(ctx context.Context, request resource.Confi
 }
 
 func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRequest, response *resource.SchemaResponse) {
-	// todo markdown descriptions and rest of metadata
+	// todo validation
 	response.Schema = schema.Schema{
 		MarkdownDescription: "Aura instance",
 		Attributes: map[string]schema.Attribute{
-			"id": schema.StringAttribute{
+			"instance_id": schema.StringAttribute{
 				MarkdownDescription: "Id of the instance",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
@@ -85,17 +92,21 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				Required:            true,
 			},
 			"region": schema.StringAttribute{
-				Required: true,
+				MarkdownDescription: "Region of the instance",
+				Required:            true,
 			},
 			"memory": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("1GB"),
+				MarkdownDescription: "Memory allocated for the instance",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("1GB"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"type": schema.StringAttribute{
+				MarkdownDescription: "Type of the instance. Depend on your tenant configuration. One of [enterprise-db, ]" +
+					"enterprise-ds, professional-db, professional-ds, free-db]",
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("free-db"),
@@ -104,49 +115,70 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 				},
 			},
 			"cloud_provider": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("gcp"),
+				MarkdownDescription: "Cloud provider. One of [gcp, aws, azure]",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("gcp"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"tenant_id": schema.StringAttribute{
-				Required: true,
+				MarkdownDescription: "Id of the tenant",
+				Required:            true,
 			},
 			"connection_url": schema.StringAttribute{
-				Computed: true,
+				MarkdownDescription: "Bolt connection URL to the instance database",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"username": schema.StringAttribute{
-				Computed: true,
+				MarkdownDescription: "Username of the instance database",
+				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"password": schema.StringAttribute{
-				Computed:  true,
-				Sensitive: true,
+				MarkdownDescription: "Password of the instance database",
+				Computed:            true,
+				Sensitive:           true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"version": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("5"),
+				MarkdownDescription: "Version of Neo4j",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("5"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"paused": schema.BoolAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  booldefault.StaticBool(false),
+				MarkdownDescription: "Whether database is paused",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"source": schema.SingleNestedAttribute{
+				MarkdownDescription: "Information about source for the instance",
+				Optional:            true,
+				Attributes: map[string]schema.Attribute{
+					"instance_id": schema.StringAttribute{
+						MarkdownDescription: "Instance Id that contains the source database of the instance",
+						Required:            true,
+					},
+					"snapshot_id": schema.StringAttribute{
+						MarkdownDescription: "Snapshot Id of the instance containing the source database of the instance",
+						Optional:            true,
+					},
 				},
 			},
 		},
@@ -161,7 +193,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		return
 	}
 
-	postInstanceRequest := client.PostInstanceRequest{
+	postInstanceRequest := &client.PostInstanceRequest{
 		Version:       data.Version.ValueString(),
 		Region:        data.Region.ValueString(),
 		Memory:        data.Memory.ValueString(),
@@ -170,14 +202,27 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 		TenantId:      data.TenantId.ValueString(),
 		CloudProvider: data.CloudProvider.ValueString(),
 	}
+	if !data.Source.IsNull() {
+		var sourceData InstanceResourceSourceModel
+		response.Diagnostics.Append(data.Source.As(ctx, &sourceData, basetypes.ObjectAsOptions{})...)
+		if response.Diagnostics.HasError() {
+			return
+		}
+		postInstanceRequest.SourceInstanceId = sourceData.InstanceId.ValueStringPointer()
+		if !sourceData.SnapshotId.IsNull() {
 
-	postInstanceResp, err := r.auraApi.PostInstance(postInstanceRequest)
+			// todo validate snapshot if created
+			postInstanceRequest.SourceSnapshotId = sourceData.SnapshotId.ValueStringPointer()
+		}
+	}
+
+	postInstanceResp, err := r.auraApi.PostInstance(*postInstanceRequest)
 	if err != nil {
 		response.Diagnostics.AddError("Error while creating an instance", err.Error())
 		return
 	}
 
-	data.Id = types.StringValue(postInstanceResp.Data.Id)
+	data.InstanceId = types.StringValue(postInstanceResp.Data.Id)
 	data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
 	data.Username = types.StringValue(postInstanceResp.Data.Username)
 	data.Password = types.StringValue(postInstanceResp.Data.Password)
@@ -195,7 +240,7 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 
 	// Pausing new instance
 	if data.Paused.ValueBool() {
-		diagError := r.pauseInstance(ctx, data.Id.ValueString())
+		diagError := r.pauseInstance(ctx, data.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
 			return
@@ -217,6 +262,7 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
 }
 
+// todo implement override based on source instance
 func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var plan InstanceResourceModel
 
@@ -226,7 +272,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		return
 	}
 
-	instance, err := r.auraApi.GetInstanceById(plan.Id.ValueString())
+	instance, err := r.auraApi.GetInstanceById(plan.InstanceId.ValueString())
 	if err != nil {
 		response.Diagnostics.AddError("Error while getting instance details", err.Error())
 		return
@@ -255,7 +301,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 			return
 		}
 
-		_, err = r.waitUntilInstanceIsInState(ctx, plan.Id.ValueString(), func(resp client.GetInstanceResponse) bool {
+		_, err = r.waitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
 				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(instance.Data.Status) == "paused")
@@ -288,7 +334,8 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 		return
 	}
 
-	_, err := r.auraApi.DeleteInstanceById(data.Id.ValueString())
+	_, err := r.auraApi.DeleteInstanceById(data.InstanceId.ValueString())
+	// todo should we wait until instance is deleted
 	if err != nil {
 		response.Diagnostics.AddError("Error while deleting an instance", err.Error())
 	}
@@ -336,6 +383,7 @@ func (r *InstanceResource) waitUntilInstanceIsInState(
 			return e == nil && condition(resp)
 		},
 		time.Second,
-		time.Minute*time.Duration(7),
+		// todo timeouts must be parametrized
+		time.Minute*time.Duration(15),
 	)
 }

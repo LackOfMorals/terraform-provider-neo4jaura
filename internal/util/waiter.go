@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"time"
 )
 
@@ -12,7 +13,7 @@ func WaitUntil[T any](get func() (T, error), condition func(T, error) bool, dela
 			return res, nil
 		}
 		if time.Now().After(end) {
-			return res, err
+			return res, errors.New("waiting condition wasn't reached in time")
 		}
 		time.Sleep(delay)
 	}

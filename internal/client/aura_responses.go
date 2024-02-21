@@ -46,3 +46,15 @@ type GetInstanceData struct {
 	Type          string `json:"type"`
 	Memory        string `json:"memory"`
 }
+
+type GetSnapshotsResponse struct {
+	Data []GetSnapshotData `json:"data"`
+}
+
+type GetSnapshotData struct {
+	InstanceId string `json:"instance_id"`
+	SnapshotId string `json:"snapshot_id"`
+	Profile    string `json:"profile"`
+	Status     string `json:"status"`
+	Timestamp  string `json:"timestamp"`
+}
