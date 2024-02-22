@@ -62,3 +62,11 @@ type GetSnapshotData struct {
 type GetSnapshotResponse struct {
 	Data GetSnapshotData `json:"data"`
 }
+
+type PostSnapshotResponse struct {
+	Data PostSnapshotData `json:"data"`
+}
+
+type PostSnapshotData struct {
+	SnapshotId string `json:"snapshot_id"`
+}

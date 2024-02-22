@@ -127,3 +127,14 @@ func (api *AuraApi) GetSnapshotById(instanceId string, snapshotId string) (GetSn
 	}
 	return util.Unmarshal[GetSnapshotResponse](body)
 }
+
+func (api *AuraApi) PostSnapshot(instanceId string) (PostSnapshotResponse, error) {
+	body, status, err := api.auraClient.Post(fmt.Sprintf("instances/%s/snapshots", instanceId), []byte("{}"))
+	if err != nil {
+		return PostSnapshotResponse{}, err
+	}
+	if status != 202 {
+		return PostSnapshotResponse{}, errors.New("Aura error: " + fmt.Sprintf("Status: %+v. Response: %+v", status, string(body)))
+	}
+	return util.Unmarshal[PostSnapshotResponse](body)
+}

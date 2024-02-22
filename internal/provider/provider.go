@@ -70,6 +70,7 @@ func (n *Neo4jAuraProvider) DataSources(ctx context.Context) []func() datasource
 func (n *Neo4jAuraProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		auraresource.NewInstanceResource,
+		auraresource.NewSnapshotResource,
 	}
 }
 
