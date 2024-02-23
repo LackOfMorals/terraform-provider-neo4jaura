@@ -5,5 +5,4 @@ VERSION=0.0.1
 PLUGIN_FOLDER="${HOME}/.terraform.d/plugins/terraform.local/local/${PROVIDER_NAME}/${VERSION}/darwin_arm64/terraform-provider-${PROVIDER_NAME}_v${VERSION}"
 
 go fmt
-
-env GOOS=darwin GOARCH=arm64 go build -o "$PLUGIN_FOLDER"
+go build -o "$PLUGIN_FOLDER"
