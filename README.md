@@ -37,3 +37,4 @@ and execute the script
 ## Resources 
 * [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework) - documentation of the latest version of the plugin framework
 * [Terraform Provider Scaffolding Framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) - template repository, which is good
+* [Aura API Specification](https://neo4j.com/docs/aura/platform/api/specification/) - OpenAPI specification for Aura API 
