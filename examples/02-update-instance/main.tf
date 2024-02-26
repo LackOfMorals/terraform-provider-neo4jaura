@@ -32,3 +32,16 @@ variable "name" {
 variable "memory" {
   default = "1GB"
 }
+
+output "connection_url" {
+  value = aura_instance.this.connection_url
+}
+
+output "username" {
+  value = aura_instance.this.username
+}
+
+output "password" {
+  value     = aura_instance.this.password
+  sensitive = true
+}
