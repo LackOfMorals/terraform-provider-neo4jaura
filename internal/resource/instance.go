@@ -3,13 +3,14 @@ package resource
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -36,20 +37,29 @@ type InstanceResource struct {
 }
 
 type InstanceResourceModel struct {
-	InstanceId    types.String `tfsdk:"instance_id"`
-	Name          types.String `tfsdk:"name"`
-	Region        types.String `tfsdk:"region"`
-	Memory        types.String `tfsdk:"memory"`
-	Type          types.String `tfsdk:"type"`
-	CloudProvider types.String `tfsdk:"cloud_provider"`
-	TenantId      types.String `tfsdk:"tenant_id"`
-	ConnectionUrl types.String `tfsdk:"connection_url"`
-	Username      types.String `tfsdk:"username"`
-	Password      types.String `tfsdk:"password"`
-	Version       types.String `tfsdk:"version"`
-	Paused        types.Bool   `tfsdk:"paused"`
-	Storage       types.String `tfsdk:"storage"`
-	Source        types.Object `tfsdk:"source"`
+	InstanceId            types.String `tfsdk:"instance_id"`
+	Name                  types.String `tfsdk:"name"`
+	Region                types.String `tfsdk:"region"`
+	Memory                types.String `tfsdk:"memory"`
+	Type                  types.String `tfsdk:"type"`
+	CloudProvider         types.String `tfsdk:"cloud_provider"`
+	TenantId              types.String `tfsdk:"tenant_id"`
+	ConnectionUrl         types.String `tfsdk:"connection_url"`
+	Username              types.String `tfsdk:"username"`
+	Password              types.String `tfsdk:"password"`
+	Version               types.String `tfsdk:"version"`
+	Storage               types.String `tfsdk:"storage"`
+	Status                types.String `tfsdk:"status"`
+	CreatedAt             types.String `tfsdk:"created_at"`
+	MetricsIntegrationUrl types.String `tfsdk:"metrics_integration_url"`
+	GraphNodes            types.Int32  `tfsdk:"graph_nodes"`
+	GraphRelationships    types.Int32  `tfsdk:"graph_relationships"`
+	SecondariesCount      types.Int32  `tfsdk:"secondaries_count"`
+	CdcEnrichmentMode     types.String `tfsdk:"cdc_enrichment_mode"`
+	VectorOptimized       types.Bool   `tfsdk:"vector_optimized"`
+	GraphAnalyticsPlugin  types.Bool   `tfsdk:"graph_analytics_plugin"`
+
+	Source types.Object `tfsdk:"source"`
 }
 
 type InstanceResourceSourceModel struct {
@@ -106,12 +116,13 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB"),
+					stringvalidator.OneOf("1GB", "2GB", "4GB", "8GB", "16GB", "24GB", "32GB", "48GB", "64GB",
+						"128GB", "192GB", "256GB", "384GB", "512GB"),
 				},
 			},
 			"type": schema.StringAttribute{
-				MarkdownDescription: "Type of the instance. Depend on your tenant configuration. One of [enterprise-db, ]" +
-					"enterprise-ds, professional-db, professional-ds, free-db]",
+				MarkdownDescription: "Type of the instance. Depend on your tenant configuration. One of [enterprise-db, " +
+					"enterprise-ds, professional-db, professional-ds, free-db, business-critical]",
 				Optional: true,
 				Computed: true,
 				Default:  stringdefault.StaticString("free-db"),
@@ -119,7 +130,8 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("enterprise-db", "enterprise-ds", "professional-db", "professional-ds", "free-db"),
+					stringvalidator.OneOf("enterprise-db", "enterprise-ds", "professional-db", "professional-ds",
+						"free-db", "business-critical"),
 				},
 			},
 			"cloud_provider": schema.StringAttribute{
@@ -169,20 +181,93 @@ func (r *InstanceResource) Schema(ctx context.Context, request resource.SchemaRe
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"paused": schema.BoolAttribute{
-				MarkdownDescription: "Whether database is paused",
+			"storage": schema.StringAttribute{
+				MarkdownDescription: "Storage allocated to the instance",
+				Computed:            true,
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("2GB", "4GB", "8GB", "16GB", "32GB", "48GB", "64GB", "96GB",
+						"128GB", "192GB", "256GB", "384GB", "512GB", "768GB", "1024GB", "1536GB", "2048GB"),
+				},
+			},
+			"status": schema.StringAttribute{
+				MarkdownDescription: "Status of the instance",
+				Computed:            true,
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("creating", "destroying", "running", "pausing", "paused", "suspending", "suspended", "resuming", "loading", "loading failed", "restoring", "updating", "overwriting"),
+				},
+			},
+			"created_at": schema.StringAttribute{
+				MarkdownDescription: "The timestamp when the instance was created",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"metrics_integration_url": schema.StringAttribute{
+				MarkdownDescription: "Metrics integration endpoint URL",
+				Computed:            true,
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"graph_nodes": schema.Int32Attribute{
+				MarkdownDescription: "Number of nodes in the graph (only for free-db)",
 				Optional:            true,
 				Computed:            true,
-				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
+				},
+			},
+			"graph_relationships": schema.Int32Attribute{
+				MarkdownDescription: "Number of relationships in the graph (only for free-db)",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
+				},
+			},
+			"secondaries_count": schema.Int32Attribute{
+				MarkdownDescription: "The number of secondaries in an Instance. (VDC only)",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
+				},
+			},
+			"cdc_enrichment_mode": schema.StringAttribute{
+				MarkdownDescription: "CDC enrichment mode. One of [disabled, enabled, auto]",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf("OFF", "DIFF", "FULL"),
+				},
+			},
+			"vector_optimized": schema.BoolAttribute{
+				MarkdownDescription: "The vector optimization configuration of the instance",
+				Optional:            true,
+				Computed:            true,
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"storage": schema.StringAttribute{
-				MarkdownDescription: "Storage allocated to the instance",
+			"graph_analytics_plugin": schema.BoolAttribute{
+				MarkdownDescription: "The graph analytics plugin configuration of the instance.",
+				Optional:            true,
 				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"source": schema.SingleNestedAttribute{
@@ -238,12 +323,29 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 			postInstanceRequest.SourceSnapshotId = sourceData.SnapshotId.ValueStringPointer()
 		}
 	}
+	if !data.Storage.IsUnknown() {
+		postInstanceRequest.Storage = data.Storage.ValueStringPointer()
+	}
+	if !data.SecondariesCount.IsUnknown() {
+		postInstanceRequest.SecondariesCount = data.SecondariesCount.ValueInt32Pointer()
+	}
+	if !data.CdcEnrichmentMode.IsUnknown() {
+		postInstanceRequest.CdcEnrichmentMode = data.CdcEnrichmentMode.ValueStringPointer()
+	}
+	if !data.VectorOptimized.IsUnknown() {
+		postInstanceRequest.VectorOptimized = data.VectorOptimized.ValueBoolPointer()
+	}
+	if !data.GraphAnalyticsPlugin.IsUnknown() {
+		postInstanceRequest.GraphAnalyticsPlugin = data.GraphAnalyticsPlugin.ValueBoolPointer()
+	}
 
 	postInstanceResp, err := r.auraApi.PostInstance(*postInstanceRequest)
 	if err != nil {
 		response.Diagnostics.AddError("Error while creating an instance", err.Error())
 		return
 	}
+
+	requestedStatus := data.Status
 
 	data.InstanceId = types.StringValue(postInstanceResp.Data.Id)
 	data.ConnectionUrl = types.StringValue(postInstanceResp.Data.ConnectionUrl)
@@ -260,17 +362,86 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	}
 	if instance.Data.Storage != nil {
 		data.Storage = types.StringValue(*instance.Data.Storage)
+	} else {
+		data.Storage = types.StringNull()
 	}
+	if instance.Data.CreatedAt != nil {
+		data.CreatedAt = types.StringValue(*instance.Data.CreatedAt)
+	} else {
+		data.CreatedAt = types.StringNull()
+	}
+	if instance.Data.MetricsIntegrationUrl != nil {
+		data.MetricsIntegrationUrl = types.StringValue(*instance.Data.MetricsIntegrationUrl)
+	} else {
+		data.MetricsIntegrationUrl = types.StringNull()
+	}
+	if instance.Data.GraphNodes != nil {
+		graphNodes, err := strconv.Atoi(*instance.Data.GraphNodes)
+		if err != nil {
+			response.Diagnostics.AddWarning(
+				"Error while parsing graph nodes",
+				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
+			)
+			data.GraphNodes = types.Int32Null()
+		} else {
+			data.GraphNodes = types.Int32Value(int32(graphNodes))
+		}
+	} else {
+		data.GraphNodes = types.Int32Null()
+	}
+	if instance.Data.GraphRelationships != nil {
+		graphRelationships, err := strconv.Atoi(*instance.Data.GraphRelationships)
+		if err != nil {
+			response.Diagnostics.AddWarning(
+				"Error while parsing graph relationships",
+				fmt.Sprintf("Cannot convert value to int: %s", *instance.Data.GraphNodes),
+			)
+			data.GraphRelationships = types.Int32Null()
+		} else {
+			data.GraphRelationships = types.Int32Value(int32(graphRelationships))
+		}
+	} else {
+		data.GraphRelationships = types.Int32Null()
+	}
+	if instance.Data.SecondariesCount != nil {
+		data.SecondariesCount = types.Int32Value(int32(*instance.Data.SecondariesCount))
+	} else {
+		data.SecondariesCount = types.Int32Null()
+	}
+	if instance.Data.CdcEnrichmentMode != nil {
+		data.CdcEnrichmentMode = types.StringValue(*instance.Data.CdcEnrichmentMode)
+	} else {
+		data.CdcEnrichmentMode = types.StringNull()
+	}
+	if instance.Data.VectorOptimized != nil {
+		data.VectorOptimized = types.BoolValue(*instance.Data.VectorOptimized)
+	} else {
+		data.VectorOptimized = types.BoolNull()
+	}
+	if instance.Data.GraphAnalyticsPlugin != nil {
+		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
+	} else {
+		data.GraphAnalyticsPlugin = types.BoolNull()
+	}
+	if instance.Data.GraphAnalyticsPlugin != nil {
+		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
+	} else {
+		data.GraphAnalyticsPlugin = types.BoolNull()
+	}
+
+	requestedStatus = data.Status
+	data.Status = types.StringValue(data.Status.ValueString())
 
 	tflog.Debug(ctx, fmt.Sprintf("Instance %s is running", postInstanceResp.Data.Id))
 
 	// Pausing new instance
-	if data.Paused.ValueBool() {
+	if strings.ToLower(requestedStatus.ValueString()) == "paused" {
 		diagError := r.pauseInstance(ctx, data.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
 			return
 		}
+		data.Status = requestedStatus
 	}
 
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
@@ -305,7 +476,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Resume
-	if !plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) == "paused" {
+	if strings.ToLower(plan.Status.ValueString()) == "running" && instance.Data.CanBeResumed() {
 		diagError := r.resumeInstance(ctx, instance.Data.Id)
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
@@ -340,7 +511,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Pause
-	if plan.Paused.ValueBool() && strings.ToLower(instance.Data.Status) != "paused" {
+	if strings.ToLower(plan.Status.ValueString()) == "paused" && instance.Data.CanBePaused() {
 		diagError := r.pauseInstance(ctx, instance.Data.Id)
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)

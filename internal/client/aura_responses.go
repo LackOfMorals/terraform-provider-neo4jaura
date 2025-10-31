@@ -1,5 +1,7 @@
 package client
 
+import "strings"
+
 type TokenResponse struct {
 	AccessToken string `json:"access_token"`
 	ExpiredIn   int64  `json:"expires_in"`
@@ -35,16 +37,34 @@ type GetInstanceResponse struct {
 }
 
 type GetInstanceData struct {
-	Id            string  `json:"id"`
-	Name          string  `json:"name"`
-	Status        string  `json:"status"`
-	TenantId      string  `json:"tenant_id"`
-	CloudProvider string  `json:"cloud_provider"`
-	ConnectionUrl string  `json:"connection_url"`
-	Region        string  `json:"region"`
-	Type          string  `json:"type"`
-	Memory        string  `json:"memory"`
-	Storage       *string `json:"storage"`
+	Id                    string  `json:"id"`
+	Name                  string  `json:"name"`
+	Status                string  `json:"status"`
+	TenantId              string  `json:"tenant_id"`
+	CloudProvider         string  `json:"cloud_provider"`
+	ConnectionUrl         string  `json:"connection_url"`
+	Region                string  `json:"region"`
+	Type                  string  `json:"type"`
+	Memory                string  `json:"memory"`
+	Storage               *string `json:"storage"`
+	CreatedAt             *string `json:"created_at"`
+	MetricsIntegrationUrl *string `json:"metrics_integration_url"`
+	GraphNodes            *string `json:"graph_nodes"`
+	GraphRelationships    *string `json:"graph_relationships"`
+	SecondariesCount      *int    `json:"secondaries_count"`
+	CdcEnrichmentMode     *string `json:"cdc_enrichment_mode"`
+	VectorOptimized       *bool   `json:"vector_optimized"`
+	GraphAnalyticsPlugin  *bool   `json:"graph_analytics_plugin"`
+}
+
+func (d GetInstanceData) CanBePaused() bool {
+	status := strings.ToLower(d.Status)
+	return status == "running"
+}
+
+func (d GetInstanceData) CanBeResumed() bool {
+	status := strings.ToLower(d.Status)
+	return status == "paused"
 }
 
 type GetSnapshotsResponse struct {

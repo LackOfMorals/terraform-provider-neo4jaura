@@ -1,15 +1,20 @@
 package client
 
 type PostInstanceRequest struct {
-	Version          string  `json:"version"`
-	Region           string  `json:"region"`
-	Memory           string  `json:"memory"`
-	Name             string  `json:"name"`
-	Type             string  `json:"type"`
-	TenantId         string  `json:"tenant_id"`
-	CloudProvider    string  `json:"cloud_provider"`
-	SourceInstanceId *string `json:"source_instance_id,omitempty"`
-	SourceSnapshotId *string `json:"source_snapshot_id,omitempty"`
+	Version              string  `json:"version"`
+	Region               string  `json:"region"`
+	Memory               string  `json:"memory"`
+	Name                 string  `json:"name"`
+	Type                 string  `json:"type"`
+	TenantId             string  `json:"tenant_id"`
+	CloudProvider        string  `json:"cloud_provider"`
+	Storage              *string `json:"storage,omitempty"`
+	SecondariesCount     *int32  `json:"secondaries_count,omitempty"`
+	CdcEnrichmentMode    *string `json:"cdc_enrichment_mode,omitempty"`
+	VectorOptimized      *bool   `json:"vector_optimized,omitempty"`
+	GraphAnalyticsPlugin *bool   `json:"graph_analytics_plugin,omitempty"`
+	SourceInstanceId     *string `json:"source_instance_id,omitempty"`
+	SourceSnapshotId     *string `json:"source_snapshot_id,omitempty"`
 }
 
 type PatchInstanceRequest struct {

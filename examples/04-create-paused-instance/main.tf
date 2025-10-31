@@ -20,7 +20,7 @@ resource "aura_instance" "this" {
   memory         = "1GB"
   type           = "professional-db"
   tenant_id      = data.aura_tenants.this.tenants.0.id
-  paused         = var.paused
+  status         = var.paused ? "paused" : "running"
 }
 
 data "aura_tenants" "this" {}
