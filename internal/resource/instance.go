@@ -102,6 +102,18 @@ type InstanceResourceSourceModel struct {
 	SnapshotId types.String `tfsdk:"snapshot_id"`
 }
 
+func (m InstanceResourceModel) CanBePaused() bool {
+	return !m.Status.IsUnknown() &&
+		!m.Status.IsNull() &&
+		strings.ToLower(m.Status.ValueString()) == "running"
+}
+
+func (m InstanceResourceModel) CanBeResumed() bool {
+	return !m.Status.IsUnknown() &&
+		!m.Status.IsNull() &&
+		strings.ToLower(m.Status.ValueString()) == "paused"
+}
+
 func (r *InstanceResource) Metadata(ctx context.Context, request resource.MetadataRequest, response *resource.MetadataResponse) {
 	response.TypeName = request.ProviderTypeName + "_instance"
 }
@@ -479,11 +491,6 @@ func (r *InstanceResource) Create(ctx context.Context, request resource.CreateRe
 	} else {
 		data.GraphAnalyticsPlugin = types.BoolNull()
 	}
-	if instance.Data.GraphAnalyticsPlugin != nil {
-		data.GraphAnalyticsPlugin = types.BoolValue(*instance.Data.GraphAnalyticsPlugin)
-	} else {
-		data.GraphAnalyticsPlugin = types.BoolNull()
-	}
 
 	requestedStatus = data.Status
 	data.Status = types.StringValue(data.Status.ValueString())
@@ -590,27 +597,23 @@ func (r *InstanceResource) Read(ctx context.Context, request resource.ReadReques
 	response.Diagnostics.Append(response.State.Set(ctx, &stateData)...)
 }
 
-// todo implement override based on source instance
 func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var plan InstanceResourceModel
+	var state InstanceResourceModel
 
 	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
-
 	if response.Diagnostics.HasError() {
 		return
 	}
 
-	response.Diagnostics.Append(request.State.Get(ctx, &plan)...)
-
-	instance, err := r.auraApi.GetInstanceById(ctx, plan.InstanceId.ValueString())
-	if err != nil {
-		response.Diagnostics.AddError("Error while getting instance details", err.Error())
+	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	if response.Diagnostics.HasError() {
 		return
 	}
 
 	// Resume
-	if strings.ToLower(plan.Status.ValueString()) == "running" && instance.Data.CanBeResumed() {
-		diagError := r.resumeInstance(ctx, instance.Data.Id)
+	if strings.ToLower(plan.Status.ValueString()) == "running" && state.CanBeResumed() {
+		diagError := r.resumeInstance(ctx, state.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
 			return
@@ -618,10 +621,11 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Regular inplace update
-	if plan.Name.ValueString() != instance.Data.Name || plan.Memory.ValueString() != instance.Data.Memory {
+	if !plan.Name.Equal(state.Name) || !plan.Memory.Equal(state.Memory) {
 		tflog.Debug(ctx, fmt.Sprintf("Updating instance details: Name: %s -> %s. Memory: %s -> %s",
-			instance.Data.Name, plan.Name.ValueString(), instance.Data.Memory, plan.Memory.ValueString()))
-		_, err := r.auraApi.PatchInstanceById(ctx, instance.Data.Id, client.PatchInstanceRequest{
+			state.Name.ValueString(), plan.Name.ValueString(), state.Memory.ValueString(), plan.Memory.ValueString()))
+
+		_, err := r.auraApi.PatchInstanceById(ctx, state.InstanceId.ValueString(), client.PatchInstanceRequest{
 			Name:   plan.Name.ValueStringPointer(),
 			Memory: plan.Memory.ValueStringPointer(),
 		})
@@ -634,7 +638,7 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 		_, err = r.auraApi.WaitUntilInstanceIsInState(ctx, plan.InstanceId.ValueString(), func(resp client.GetInstanceResponse) bool {
 			return resp.Data.Memory == plan.Memory.ValueString() &&
 				resp.Data.Name == plan.Name.ValueString() &&
-				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(instance.Data.Status) == "paused")
+				(strings.ToLower(resp.Data.Status) == "running" || strings.ToLower(resp.Data.Status) == "paused")
 		})
 
 		if err != nil {
@@ -644,8 +648,8 @@ func (r *InstanceResource) Update(ctx context.Context, request resource.UpdateRe
 	}
 
 	// Pause
-	if strings.ToLower(plan.Status.ValueString()) == "paused" && instance.Data.CanBePaused() {
-		diagError := r.pauseInstance(ctx, instance.Data.Id)
+	if strings.ToLower(plan.Status.ValueString()) == "paused" && state.CanBePaused() {
+		diagError := r.pauseInstance(ctx, state.InstanceId.ValueString())
 		if diagError.IsNotEmpty() {
 			response.Diagnostics.AddError(diagError.Message, diagError.Details)
 			return
@@ -668,6 +672,10 @@ func (r *InstanceResource) Delete(ctx context.Context, request resource.DeleteRe
 	// todo should we wait until instance is deleted
 	if err != nil {
 		response.Diagnostics.AddError("Error while deleting an instance", err.Error())
+	}
+	err = r.auraApi.WaitUntilInstanceIsDeleted(ctx, data.InstanceId.ValueString())
+	if err != nil {
+		response.Diagnostics.AddError("Error while waiting for deleting an instance", err.Error())
 	}
 }
 

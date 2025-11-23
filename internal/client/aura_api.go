@@ -206,9 +206,9 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 	condition func(GetInstanceResponse) bool) (GetInstanceResponse, error) {
 	return util.WaitUntil(
 		func() (GetInstanceResponse, error) {
-			r, e := api.GetInstanceById(ctx, id)
-			tflog.Debug(ctx, fmt.Sprintf("Received response %+v and error %+v", r, e))
-			return r, e
+			resp, err := api.GetInstanceById(ctx, id)
+			tflog.Trace(ctx, fmt.Sprintf("Received response %+v and error %+v", resp, err))
+			return resp, err
 		},
 		func(resp GetInstanceResponse, e error) bool {
 			return e == nil && condition(resp)
@@ -216,4 +216,20 @@ func (api *AuraApi) WaitUntilInstanceIsInState(
 		time.Second,
 		api.instanceTimeout,
 	)
+}
+
+func (api *AuraApi) WaitUntilInstanceIsDeleted(ctx context.Context, id string) (err error) {
+	_, err = util.WaitUntil(
+		func() (status int, err error) {
+			_, status, err = api.auraClient.Get(ctx, "instances/"+id)
+			tflog.Trace(ctx, fmt.Sprintf("Received response status %+d and error %+v", status, err))
+			return
+		},
+		func(status int, err error) bool {
+			return err == nil && status == 404
+		},
+		time.Millisecond*500,
+		api.instanceTimeout,
+	)
+	return
 }
