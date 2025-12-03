@@ -4,14 +4,14 @@ Available as a Neo4j Labs Project ( See Disclaimer further down this README )  N
 
 * Obtaining information about a project ( tenant )
 * Create, modify, pause, resume and delete operations for AuraDB instances
-* Take and restore AuraDB snaphots.  
+* Take and restore AuraDB snapshots.  
 * Creating an Aura instance from a snapshot
 
 __Neo4j Aura Terraform Provider is a Neo4j Labs Project.  Please read the Disclaimer at the bottom of this page before use.__
 
-## Using from the Terraform Provider Repositry
+## Using from the Terraform Provider Registry
 
-To use directly from the [Terraform Provider Repository](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest), copy and paste this code into your Terraform configuration, adjusting the configuration options to meet your requirements.  
+To use directly from the [Terraform Provider Registry](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest), copy and paste this code into your Terraform configuration, adjusting the configuration options to meet your requirements.  
 
 
 ```Text
@@ -140,7 +140,7 @@ Neo4j Labs projects, while trying to apply sound engineering principles, are pro
 | Releases | [https://github.com/neo4j-labs/terraform-provider-neo4jaura/releases](https://github.com/neo4j-labs/terraform-provider-neo4jaura/releases) |
 | Source | [https://github.com/neo4j-labs/terraform-provider-neo4jaura](https://github.com/neo4j-labs/terraform-provider-neo4jaura) |
 | Issues | [https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues](https://github.com/neo4j-labs/terraform-provider-neo4jaura/issues) |
-| Terraform provider repositry | [https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest ) |
+| Terraform provider registry | [https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest ) |
 | Terraform plugin framework | [https://developer.hashicorp.com/terraform/plugin/framework](https://developer.hashicorp.com/terraform/plugin/framework) |
 | Terraform provider scaffolding framework | [https://github.com/hashicorp/terraform-provider-scaffolding-framework](https://github.com/hashicorp/terraform-provider-scaffolding-framework) |
 | Aura API specifcation | [https://neo4j.com/docs/aura/platform/api/specification/](https://neo4j.com/docs/aura/platform/api/specification/) |
