@@ -31,7 +31,7 @@ provider "neo4jaura" {
 Then run ```terraform init```
 
 
-See Examples for the various possible configuration options
+See [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) for the various possible configuration options
 
 
 ## Using from GitHUb repository
@@ -77,7 +77,7 @@ provider_installation {
 
 ## Example configurations 
 
-There are several examples in the examples folder. You will need to set  TF_VAR_client_id and TF_VAR_client_secret environment variables before running any of the examples. 
+Several example configurations are provided in the [Examples](https://github.com/neo4j-labs/terraform-provider-neo4jaura/tree/main/examples) folder of this repository. You will need to set  TF_VAR_client_id and TF_VAR_client_secret environment variables before running any of the examples. 
 
 ```Text
 export TF_VAR_client_id="$AURA_CLIENT_ID"
