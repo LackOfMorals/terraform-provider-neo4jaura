@@ -11,7 +11,7 @@ __Neo4j Aura Terraform Provider is a Neo4j Labs Project.  Please read the Discla
 
 ## Using from the Terraform Provider Repositry
 
-To install this provider, copy and paste this code into your Terraform configuration, adjusting the configuration options to meet your requirements.  
+To use directly from the [Terraform Provider Repository](https://registry.terraform.io/providers/neo4j-labs/neo4jaura/latest), copy and paste this code into your Terraform configuration, adjusting the configuration options to meet your requirements.  
 
 
 ```Text
